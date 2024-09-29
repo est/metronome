@@ -1,0 +1,246 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"">
+  <title>Metronome</title>
+  <style>
+    html {
+        height: 100%;
+    }
+    body {
+        background-color: #1e2227;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-flow: column;
+        height: 100%;
+        font-family: Arial, sans-serif;
+        color: #e9e9e9;
+    }
+    #btn_play {
+        width: 150px;
+        height: 150px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-flow: column;
+        margin-bottom: 30px;
+    }
+    .title {
+        margin-bottom: 40px;
+        font-size: 3em;
+        text-align: center;
+    }
+    #ctrl_tempo {
+        width: 2em;
+        font-size: 40px;
+    }
+    #ctrl_beats {
+        font-size: 30px;
+    }
+    .controls {
+        margin-top: 5px;
+        margin-bottom: 5px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-flow: row;
+    }
+    .controls .indicator {
+        margin: 0 15px;
+        text-align: center;
+    }
+    .controls .indicator .unit {
+        font-size: 12px;
+    }
+    button {
+      padding: 6px;
+      border: none;
+      border-radius: 100%;
+      width: 40px;
+      height: 40px;
+      margin: 5px;
+      background-color: #2a4949;
+      color: #e9e9e9;
+      cursor: pointer;
+    }
+    button:focus {
+				user-select: none;
+        outline: none;
+    }
+    .created-by {
+        margin-top: 40px;
+    }
+
+    a {
+        color: #e9e9e9;
+    }
+
+    a:hover {
+        color: #356161;
+    }
+
+    .play {
+        width: 0;
+        height: 0;
+        border-top: 30px solid transparent;
+        border-bottom: 30px solid transparent;
+        border-left: 50px solid #e9e9e9;
+        margin-left: 15px;
+    }
+
+    .pause {
+        width: 15px;
+        height: 60px;
+        border: none;
+        border-left: 15px solid #e9e9e9;
+        border-right: 15px solid #e9e9e9;
+    }
+  </style>
+</head>
+<body>
+    <div class="title">🎧 · 🎚️ · 🎼</div>
+    <button id="btn_play" class="">
+        <div id="btn_play_icon" class="play"></div>
+    </button>
+
+    <div class="controls">
+        <button class="beats-change" data-change="-1">-</button>
+        <div class="indicator">
+            <div id="ctrl_beats">4</div>
+            <div class="unit">beats</div>
+        </div>
+        <button class="beats-change" data-change="+1">+</button>
+    </div>
+
+    <div class="controls">
+        <button class="tempo-change" data-change="-5">-5</button>
+        <button class="tempo-change" data-change="-1">-</button>
+
+        <div class="indicator">
+            <div id="ctrl_tempo">120</div>
+            <div class="unit">bpm</div>
+        </div>
+
+        <button class="tempo-change" data-change="+1">+</button>
+        <button class="tempo-change" data-change="+5">+5</button>
+    </div>
+
+    <div class="created-by">
+      Created by <a href="https://grantjam.es/creating-a-simple-metronome-using-javascript-and-the-web-audio-api/">Grant James</a>, 
+      modified by <a href="https://blog.est.im/2024/stdout-19">est</a> | source | demo
+    </div>
+
+    <script>
+      class Metronome{
+        constructor(tempo = 120) {
+            this.ctx = null;
+            this.currentBeatInBar = 0;
+            this.beatsPerBar = 4;
+            this.tempo = tempo;
+            this.lookahead = 25;          // How frequently to call scheduling function (in milliseconds)
+            this.scheduleAheadTime = 0.1;   // How far ahead to schedule audio (sec)
+            this.nextNoteTime = 0.0;     // when the next note is due
+            this.runningID = null;  // interval id
+        }
+        calc_next() {
+            // Advance current note and time by a quarter note (crotchet if you're posh)
+            var secondsPerBeat = 60.0 / this.tempo; // Notice this picks up the CURRENT tempo value to calculate beat length.
+            this.nextNoteTime += secondsPerBeat; // Add beat length to last beat time
+            this.currentBeatInBar = ++this.currentBeatInBar % this.beatsPerBar;
+        }
+
+        play_at(beatNumber, time) {
+            const envelope = this.ctx.createGain();  // wrap the sound sharper
+            envelope.gain.value = 1;
+            envelope.gain.exponentialRampToValueAtTime(1, time + 0.001);
+            envelope.gain.exponentialRampToValueAtTime(0.001, time + 0.02);
+            envelope.connect(this.ctx.destination);
+
+            const osc = this.ctx.createOscillator();  // create a sound
+            osc.frequency.value = (beatNumber % this.beatsPerBar == 0) ? 1000 : 800;
+            osc.connect(envelope);
+
+            osc.start(time);
+            osc.stop(time + 0.03);
+        }
+
+        incr_tempo(val){
+            const c = metronome.tempo + val
+            if (c >0 ) this.tempo = c
+            return this.tempo
+        }
+
+        scheduler() {
+            // called every `lookahead` ms
+            while (this.nextNoteTime < this.ctx.currentTime + this.scheduleAheadTime ) {
+                this.play_at(this.currentBeatInBar, this.nextNoteTime);
+                this.calc_next();
+            }
+        }
+
+        start() {
+            if (this.runningID) return;
+            if (this.ctx == null) this.ctx = new AudioContext();
+            this.currentBeatInBar = 0;  // reset
+            this.nextNoteTime = this.ctx.currentTime + 0.05;
+            this.runningID = setInterval(() => this.scheduler(), this.lookahead);
+        }
+
+        stop() {
+            clearInterval(this.runningID);
+            this.runningID = null;
+        }
+
+        async startStop()
+        {
+            if (this.runningID) {
+                this.stop();
+                if (this.wakeLock) {
+                  await this.wakeLock.release();
+                }
+                return 'play'
+            }
+            else {
+                this.start();
+                try {
+                  this.wakeLock = await navigator.wakeLock.request("screen");
+                } catch (err) {
+                  // e.g. low on battery
+                  console.log(`${err.name}, ${err.message}`);
+                }
+                return 'pause'
+            }
+        }
+      }
+      var metronome = new Metronome();
+      ctrl_tempo.textContent = metronome.tempo;
+      ctrl_beats.textContent = metronome.beatsPerBar;
+      btn_play.onclick = async function(){
+        btn_play_icon.className = await metronome.startStop();
+      }
+
+      function change_beats(){
+        const c = metronome.beatsPerBar + parseInt(this.dataset.change)
+        if (c > 0) ctrl_beats.textContent = metronome.beatsPerBar = c;
+      }
+      document.querySelectorAll('.controls button.beats-change').forEach((e)=>e.onclick=change_beats)
+
+      function change_tempo(ev){
+          ctrl_tempo.textContent = metronome.incr_tempo(parseInt(this.dataset.change))
+      }
+      document.querySelectorAll('.controls button.tempo-change').forEach(function(el){
+        el.onclick=change_tempo;
+        el.onmousedown=el.ontouchstart=function(){
+					if (!ctrl_tempo.isholding)  ctrl_tempo.isholding = setInterval(change_tempo.bind(this), 250)
+        }
+        el.onmouseup=el.onmouseleave=el.ontouchend=el.touchcancel=()=>{
+            clearInterval(ctrl_tempo.isholding);
+            ctrl_tempo.isholding = null;
+        }
+      })
+    </script>
+</body>
+</html>
