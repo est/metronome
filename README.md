@@ -25,4 +25,4 @@ Web metronome made with Web Audio in javavscript
 
 ## 💼 License
 
-[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)
+- [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/)
