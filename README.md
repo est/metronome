@@ -15,9 +15,10 @@ Web metronome made with Web Audio in javavscript
 
 ## ☑️ ToDo:
 
-- [ ] select each beat style
+- [ ] allow empty beat
 - [ ] save preference
 - [ ] fullscreen
+- [X] toggle each beat style
 
 ## 🖋️ Blog
 
