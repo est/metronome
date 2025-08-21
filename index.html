@@ -38,7 +38,19 @@
         font-size: 40px;
     }
     #ctrl_beats {
-        font-size: 30px;
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+    }
+    .beat-icon {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background-color: #356161;
+        transition: all 0.2s ease;
+    }
+    .beat-icon.higher {
+        background-color: #4c8b8b;
     }
     .controls {
         margin-top: 5px;
@@ -107,25 +119,29 @@
     </button>
 
     <div class="controls">
-        <button class="beats-change" data-change="-1">-</button>
-        <div class="indicator">
-            <div id="ctrl_beats">4</div>
-            <div class="unit">beats</div>
+      <button class="beats-change" data-change="-1">-</button>
+      <div class="indicator">
+        <div id="ctrl_beats">
+          <div class="beat-icon higher" data-beat="1000"></div>
+          <div class="beat-icon" data-beat="800"></div>
+          <div class="beat-icon" data-beat="800"></div>
+          <div class="beat-icon" data-beat="800"></div>
         </div>
-        <button class="beats-change" data-change="+1">+</button>
+      </div>
+      <button class="beats-change" data-change="+1">+</button>
     </div>
 
     <div class="controls">
-        <button class="tempo-change" data-change="-5">-5</button>
-        <button class="tempo-change" data-change="-1">-</button>
+      <button class="tempo-change" data-change="-5">-5</button>
+      <button class="tempo-change" data-change="-1">-</button>
 
-        <div class="indicator">
-            <div id="ctrl_tempo">120</div>
-            <div class="unit">bpm</div>
-        </div>
+      <div class="indicator">
+        <div id="ctrl_tempo">120</div>
+        <div class="unit">bpm</div>
+      </div>
 
-        <button class="tempo-change" data-change="+1">+</button>
-        <button class="tempo-change" data-change="+5">+5</button>
+      <button class="tempo-change" data-change="+1">+</button>
+      <button class="tempo-change" data-change="+5">+5</button>
     </div>
 
     <div class="created-by">
@@ -138,7 +154,7 @@
         constructor(tempo = 120) {
             this.ctx = null;
             this.currentBeatInBar = 0;
-            this.beatsPerBar = 4;
+            this.beatsFreqs = [];
             this.tempo = tempo;
             this.lookahead = 25;          // How frequently to call scheduling function (in milliseconds)
             this.scheduleAheadTime = 0.1;   // How far ahead to schedule audio (sec)
@@ -149,7 +165,7 @@
             // Advance current note and time by a quarter note (crotchet if you're posh)
             var secondsPerBeat = 60.0 / this.tempo; // Notice this picks up the CURRENT tempo value to calculate beat length.
             this.nextNoteTime += secondsPerBeat; // Add beat length to last beat time
-            this.currentBeatInBar = ++this.currentBeatInBar % this.beatsPerBar;
+            this.currentBeatInBar = ++this.currentBeatInBar % this.beatsFreqs.length;
         }
 
         play_at(beatNumber, time) {
@@ -160,7 +176,7 @@
             envelope.connect(this.ctx.destination);
 
             const osc = this.ctx.createOscillator();  // create a sound
-            osc.frequency.value = (beatNumber % this.beatsPerBar == 0) ? 1000 : 800;
+            osc.frequency.value = this.beatsFreqs[beatNumber] || 800;
             osc.connect(envelope);
 
             osc.start(time);
@@ -215,18 +231,40 @@
             }
         }
       }
+
+      function refresh_beats() {
+        const beat_icons = ctrl_beats.querySelectorAll('div.beat-icon')
+        const c = beat_icons.length + parseInt(this?.dataset?.change || 0)
+        if (c<=0) c=1;
+        for (let i=c; i<beat_icons.length; i++) {
+          beat_icons[i].remove()
+        }
+        for (let i = beat_icons.length; i < c; i++) {
+          ctrl_beats.appendChild(beat_icons[beat_icons.length-1].cloneNode())
+        }
+        metronome.beatsFreqs = Array.from(
+          ctrl_beats.querySelectorAll('div.beat-icon'),
+          e=>parseInt(e?.dataset?.beat || 800))
+      }
+      document.querySelectorAll('.controls button.beats-change').forEach((e)=>e.onclick=refresh_beats)
+      ctrl_beats.onclick = function(e){
+        const candidates = Array.from(this.querySelectorAll('div.beat-icon'))
+        if (e.target.dataset.beat == '1000'){
+          e.target.dataset.beat = '800'
+          e.target.classList.remove('higher')
+        } else {
+          e.target.dataset.beat = '1000'
+          e.target.classList.add('higher')
+        }
+        metronome.beatsFreqs[candidates.indexOf(e.target)] = parseInt(e.target.dataset.beat)
+      }
+
       var metronome = new Metronome();
       ctrl_tempo.textContent = metronome.tempo;
-      ctrl_beats.textContent = metronome.beatsPerBar;
       btn_play.onclick = async function(){
         btn_play_icon.className = await metronome.startStop();
       }
-
-      function change_beats(){
-        const c = metronome.beatsPerBar + parseInt(this.dataset.change)
-        if (c > 0) ctrl_beats.textContent = metronome.beatsPerBar = c;
-      }
-      document.querySelectorAll('.controls button.beats-change').forEach((e)=>e.onclick=change_beats)
+      refresh_beats()
 
       function change_tempo(ev){
           ctrl_tempo.textContent = metronome.incr_tempo(parseInt(this.dataset.change))
